@@ -1124,11 +1124,21 @@ void WebSliderColdWarm(void)
 
 void HandleRoot(void)
 {
+
+#define AUTH_NEEDED_ON_ROOT true
+
+#ifdef DISABLE_AUTH_ON_ROOT
+#undef AUTH_NEEDED_ON_ROOT
+#define AUTH_NEEDED_ON_ROOT false
+#endif    
+
 #ifndef NO_CAPTIVE_PORTAL
   if (CaptivePortal()) { return; }  // If captive portal redirect instead of displaying the page.
 #endif  // NO_CAPTIVE_PORTAL
 
   if (Webserver->hasArg(F("rst"))) {
+    if (!WebAuthenticate())
+      return Webserver->requestAuthentication();
     WebRestart(0);
     return;
   }
@@ -1149,7 +1159,7 @@ void HandleRoot(void)
     return;
   }
 
-  if (HandleRootStatusRefresh()) {
+  if (HandleRootStatusRefresh(AUTH_NEEDED_ON_ROOT)) {
     return;
   }
 
@@ -1157,7 +1167,7 @@ void HandleRoot(void)
 
   char stemp[33];
 
-  WSContentStart_P(PSTR(D_MAIN_MENU));
+  WSContentStart_P(PSTR(D_MAIN_MENU), AUTH_NEEDED_ON_ROOT);
 #ifdef USE_SCRIPT_WEB_DISPLAY
   WSContentSend_P(HTTP_SCRIPT_ROOT, Settings->web_refresh, Settings->web_refresh);
 #else
@@ -1316,9 +1326,10 @@ void HandleRoot(void)
   WSContentStop();
 }
 
-bool HandleRootStatusRefresh(void)
+bool HandleRootStatusRefresh(bool auth)
 {
-  if (!WebAuthenticate()) {
+
+  if (auth && !WebAuthenticate()) {
     Webserver->requestAuthentication();
     return true;
   }
