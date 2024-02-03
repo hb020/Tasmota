@@ -197,6 +197,7 @@
 #define D_CMND_PID_SETMANUAL_POWER "ManualPower"
 #define D_CMND_PID_SETMAX_INTERVAL "MaxInterval"
 #define D_CMND_PID_SETUPDATE_SECS "UpdateSecs"
+#define D_CMND_PID_SETSHUTDOWN "Shutdown"
 
 const char kPIDCommands[] PROGMEM = D_PRFX_PID "|" // Prefix
   D_CMND_PID_SETPV "|"
@@ -209,7 +210,8 @@ const char kPIDCommands[] PROGMEM = D_PRFX_PID "|" // Prefix
   D_CMND_PID_SETAUTO "|"
   D_CMND_PID_SETMANUAL_POWER "|"
   D_CMND_PID_SETMAX_INTERVAL "|"
-  D_CMND_PID_SETUPDATE_SECS;
+  D_CMND_PID_SETUPDATE_SECS "|"
+  D_CMND_PID_SETSHUTDOWN;
   ;
 
 void (* const PIDCommand[])(void) PROGMEM = {
@@ -223,7 +225,8 @@ void (* const PIDCommand[])(void) PROGMEM = {
   &CmndSetAuto,
   &CmndSetManualPower,
   &CmndSetMaxInterval,
-  &CmndSetUpdateSecs
+  &CmndSetUpdateSecs,
+  &CmndSetShutdown
   };
 
 struct {
@@ -233,6 +236,7 @@ struct {
   unsigned long last_pv_update_secs = 0;
   bool run_pid_now = false;     // tells PID_Every_Second to run the pid algorithm
   long current_time_secs = 0;  // a counter that counts seconds since initialisation
+  bool shutdown = false;        // power commands will be ignored when true
 } Pid;
 
 void PIDInit()
@@ -351,16 +355,20 @@ void CmndSetDSmooth(void) {
 
 void CmndSetAuto(void) {
   if (XdrvMailbox.payload >= 0) {
-    Pid.pid.setAuto(XdrvMailbox.payload);
+    if(!Pid.shutdown) {
+      Pid.pid.setAuto(XdrvMailbox.payload);
+    }
   }
   ResponseCmndNumber(Pid.pid.getAuto());
 }
 
 void CmndSetManualPower(void) {
   if (XdrvMailbox.data_len > 0) {
-    Pid.pid.setManualPower(CharToFloat(XdrvMailbox.data));
+    if(!Pid.shutdown) {
+      Pid.pid.setManualPower(CharToFloat(XdrvMailbox.data));
+    }
   }
-  ResponseCmndFloat(Pid.pid.getManualPower(), 1);
+  ResponseCmndFloat(Pid.pid.getManualPower(), 2);
 }
 
 void CmndSetMaxInterval(void) {
@@ -381,6 +389,18 @@ void CmndSetUpdateSecs(void) {
   ResponseCmndNumber(Pid.update_secs);
 }
 
+void CmndSetShutdown(void) {
+  if (XdrvMailbox.payload >= 0) {
+    AddLog(LOG_LEVEL_INFO, PSTR("PID: Shutdown mode %s"), XdrvMailbox.payload>0 ? "activated" : "cleared");
+    Pid.shutdown = (XdrvMailbox.payload>0);
+    if(Pid.shutdown) {
+      Pid.pid.setAuto(0);
+      Pid.pid.setManualPower(0.0);
+    }
+  }
+  ResponseCmndNumber(Pid.shutdown);
+}
+
 void PIDShowValues(void) {
   char str_buf[FLOATSZ];
   char chr_buf;
@@ -394,6 +414,7 @@ void PIDShowValues(void) {
   d_buf = Pid.pid.getSp();
   dtostrfd(d_buf, 2, str_buf);
   ResponseAppend_P(PSTR("\"PidSp\":%s,"), str_buf);
+  ResponseAppend_P(PSTR("\"PidShutdown\":%d,"), Pid.shutdown);
 
 #if PID_REPORT_MORE_SETTINGS
   d_buf = Pid.pid.getPb();
@@ -433,8 +454,7 @@ void PIDShowValues(void) {
   ResponseAppend_P(PSTR("}"));
 }
 
-void PIDShowValuesWeb(void) {
-
+#ifdef USE_WEBSERVER
 #define D_PID_DISPLAY_NAME     "PID Controller"
 #define D_PID_SET_POINT        "Set Point"
 #define D_PID_PRESENT_VALUE    "Current Value"
@@ -444,12 +464,13 @@ void PIDShowValuesWeb(void) {
 #define D_PID_MODE_MANUAL      "Manual"
 #define D_PID_MODE_OFF         "Off"
 
-  const char HTTP_PID_HL[] PROGMEM = "{s}<hr>{m}<hr>{e}";
-  const char HTTP_PID_INFO[] PROGMEM = "{s}" D_PID_DISPLAY_NAME "{m}%s{e}";
-  const char HTTP_PID_SP_FORMAT[] PROGMEM = "{s}%s " "{m}%*_f ";
-  const char HTTP_PID_PV_FORMAT[] PROGMEM = "{s}%s " "{m}%*_f ";
-  const char HTTP_PID_POWER_FORMAT[] PROGMEM = "{s}%s " "{m}%*_f " D_UNIT_PERCENT;
+const char HTTP_PID_HL[] PROGMEM = "{s}<hr>{m}<hr>{e}";
+const char HTTP_PID_INFO[] PROGMEM = "{s}" D_PID_DISPLAY_NAME "{m}%s{e}";
+const char HTTP_PID_SP_FORMAT[] PROGMEM = "{s}%s " "{m}%*_f ";
+const char HTTP_PID_PV_FORMAT[] PROGMEM = "{s}%s " "{m}%*_f ";
+const char HTTP_PID_POWER_FORMAT[] PROGMEM = "{s}%s " "{m}%*_f " D_UNIT_PERCENT;
 
+void PIDShowValuesWeb(void) {
   float f_buf;
 
   WSContentSend_P(HTTP_PID_HL);
@@ -464,6 +485,7 @@ void PIDShowValuesWeb(void) {
     WSContentSend_PD(HTTP_PID_POWER_FORMAT, D_PID_POWER, 0, &f_buf);
   }
 }
+#endif  // USE_WEBSERVER
 
 void PIDRun(void) {
   double power = Pid.pid.tick(Pid.current_time_secs);
@@ -516,9 +538,11 @@ bool Xdrv49(uint32_t function) {
     case FUNC_JSON_APPEND:
       PIDShowValues();
       break;
+#ifdef USE_WEBSERVER
     case FUNC_WEB_SENSOR:
       PIDShowValuesWeb();
       break;
+#endif  // USE_WEBSERVER
   }
   return result;
 }
