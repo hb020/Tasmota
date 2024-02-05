@@ -19,6 +19,7 @@ data
 unpacked_fs
 unpacked_boards
 tasmota/user_config_override.h
+tasmota/tasmota_xdrv_driver/xdrv_128_*
 variants
 variants3
 build
