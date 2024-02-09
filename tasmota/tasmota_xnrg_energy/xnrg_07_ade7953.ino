@@ -70,15 +70,20 @@
 #define ADE7953_ADDR              0x38
 
 /*********************************************************************************************/
-
+#ifndef ADE7953_INST_ENERGY
 #define ADE7953_ACCU_ENERGY                  // Use accumulating energy instead of instant power
+#else
+#pragma message("Attention: readings can become rather noisy.")
+#endif
 
 //#define ADE7953_DUMP_REGS
 
 #define ADE7953_PREF              1540       // 4194304 / (1540 / 1000) = 2723574 (= WGAIN, VAGAIN and VARGAIN)
 #define ADE7953_UREF              26000      // 4194304 / (26000 / 10000) = 1613194 (= VGAIN)
 #define ADE7953_IREF              10000      // 4194304 / (10000 / 10000) = 4194303 (= IGAIN, needs to be different than 4194304 in order to use calib.dat)
+#ifndef ADE7953_NO_LOAD_THRESHOLD
 #define ADE7953_NO_LOAD_THRESHOLD 29196      // According to ADE7953 datasheet the default threshold for no load detection is 58,393 use half this value to measure lower (5w) powers.
+#endif
 #define ADE7953_NO_LOAD_ENABLE    0          // Set DISNOLOAD register to 0 to enable No-load detection
 #define ADE7953_NO_LOAD_DISABLE   7          // Set DISNOLOAD register to 7 to disable No-load detection
 
@@ -414,7 +419,7 @@ void Ade7953Init(void) {
     Ade7953Write(ADE7953_CONFIG, 0x0004);                        // Locking the communication interface (Clear bit COMM_LOCK), Enable HPF
     Ade7953Write(0x0FE, 0x00AD);                                 // Unlock register 0x120
     Ade7953Write(ADE7953_RESERVED_0X120, 0x0030);                // Configure optimum setting
-    Ade7953Write(ADE7953_DISNOLOAD, 0x07);                       // Disable no load detection, required before setting thresholds
+    Ade7953Write(ADE7953_DISNOLOAD, 0x07);                       // Disable no load detection, required before setting thresholds    
     Ade7953Write(ADE7953_AP_NOLOAD, ADE7953_NO_LOAD_THRESHOLD);  // Set no load treshold for active power
     Ade7953Write(ADE7953_VAR_NOLOAD, ADE7953_NO_LOAD_THRESHOLD); // Set no load treshold for reactive power
     Ade7953Write(ADE7953_DISNOLOAD, 0x00);                       // Enable no load detection
