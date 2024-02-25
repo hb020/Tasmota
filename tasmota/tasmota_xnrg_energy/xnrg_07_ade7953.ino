@@ -82,7 +82,7 @@
 #define ADE7953_UREF              26000      // 4194304 / (26000 / 10000) = 1613194 (= VGAIN)
 #define ADE7953_IREF              10000      // 4194304 / (10000 / 10000) = 4194303 (= IGAIN, needs to be different than 4194304 in order to use calib.dat)
 #ifndef ADE7953_NO_LOAD_THRESHOLD
-#define ADE7953_NO_LOAD_THRESHOLD 29196      // According to ADE7953 datasheet the default threshold for no load detection is 58,393 use half this value to measure lower (5w) powers.
+#define ADE7953_NO_LOAD_THRESHOLD 29196      // According to ADE7953 datasheet the default threshold for no load detection is 58,393. Use half this value to measure lower (5w) powers.
 #endif
 #define ADE7953_NO_LOAD_ENABLE    0          // Set DISNOLOAD register to 0 to enable No-load detection
 #define ADE7953_NO_LOAD_DISABLE   7          // Set DISNOLOAD register to 7 to disable No-load detection
